@@ -6,7 +6,7 @@ if (typeof web3.eth.getBlockPromise !== "function") {
     Promise.promisifyAll(web3.eth, { suffix: "Promise" });
 }
 
-contract('Shopfront', ([owner, Alice, Bob]) => {
+contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
 
     const id = 1;
     const name = "Longsword";
@@ -105,6 +105,31 @@ contract('Shopfront', ([owner, Alice, Bob]) => {
         await shop.depositFunds({from: owner, value: depositAmount});
         await shop.withdrawFunds(moreThanAvailableFunds, {from: owner}).should.be.rejectedWith(EVMThrow);
     })
+
+    it("should throw if anyone trys to make a purchase while the buyItem() is frozen", async() => {
+        await shop.addItem(id, name, price, quantity, {from: owner});
+        await shop.freeze(true, {from: owner});
+        await shop.buyItem(id, quantity, {from: Alice, value: 17000}).should.be.rejectedWith(EVMThrow);
+    })
+
+    it("should let the owner un-freeze the buyItem() function", async() => {
+        await shop.addItem(id, name, price, quantity, {from: owner});
+        await shop.freeze(true, {from: owner});
+        await shop.buyItem(id, quantity, {from: Alice, value: 17000}).should.be.rejectedWith(EVMThrow);
+        await shop.freeze(false, {from: owner});
+        await shop.buyItem(id, quantity, {from: Alice, value: 17000}).should.not.be.rejectedWith(EVMThrow);
+    })
+
+    it("should not let anyone but the owner use the freeze() function", async() => {
+        await shop.freeze(true, {from: Bob}).should.be.rejectedWith(EVMThrow);
+    })
+
+    it("should allow the current owner to set a new owner", async() => {
+        await shop.changeOwner(newOwner, {from: owner});
+        _owner = await shop.owner({from: owner});
+        _owner.should.be.equal(newOwner);
+    })
+
 
     it("should allow the owner to withdraw funds", async() => {
 

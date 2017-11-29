@@ -24,7 +24,7 @@ contract Shopfront is Freezable {
 
     function Shopfront() {}
 
-    function addItem(uint id, string name, uint price, uint quantity)  
+    function addItem(uint id, string name, uint price, uint quantity)
         public
         onlyOwner
         returns (bool success)
@@ -44,6 +44,7 @@ contract Shopfront is Freezable {
     function buyItem(uint id, uint quantity)
         public
         payable
+        freezeRay
         returns (bool success)
     {
         require(quantity <= itemsDatabase[id].quantity);
