@@ -4,7 +4,7 @@ import "./Owned.sol";
 
 contract Freezable is Owned {
     
-    bool public frozen;
+    bool private frozen;
 
     modifier freezeRay() {
         require(!frozen);
@@ -13,13 +13,22 @@ contract Freezable is Owned {
 
     event LogFreeze(address sender, bool isFrozen);
 
+    function getFrozen() 
+        public
+        view
+        returns(bool isFrozen)
+    {
+        return frozen;
+    }
+
     function freeze(bool _freeze)
         public
         onlyOwner
-        returns (bool success) {
-            require(_freeze != frozen);
-            frozen = _freeze;
-            LogFreeze(msg.sender, _freeze);
-            return true;
+        returns (bool success) 
+    {
+        require(_freeze != frozen);
+        frozen = _freeze;
+        LogFreeze(msg.sender, _freeze);
+        return true;
     }
 }
