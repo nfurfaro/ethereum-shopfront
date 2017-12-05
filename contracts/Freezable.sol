@@ -11,9 +11,9 @@ contract Freezable is Owned {
         _;
     }
 
-    event LogFreeze(address sender, bool isFrozen);
+    event LogFreeze(address sender, bool frozen);
 
-    function getFrozen() 
+    function isFrozen() 
         public
         view
         returns(bool isFrozen)
