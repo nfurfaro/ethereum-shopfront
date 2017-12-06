@@ -1,34 +1,47 @@
 pragma solidity ^0.4.18;
 
+import "zeppelin-solidity/contracts/math/SafeMath.sol";
 
 contract Owned {
 
+    using SafeMath for uint256;
+
     address private owner;
-    bool private changeInitialized;
     bytes32 private newOwnerHash;
+    uint private deadline;
+    uint private timeout;
+
 
     modifier onlyOwner() {
         require(msg.sender == owner);
         _;
     }
 
-    event LogInitializeOwnerChange(address oldOwner, address newOwner);
-    event LogConfirmOwnerChange(address sender);
+    event LogInitializeOwnerChange(address oldOwner, bytes32 newHash, uint _deadline);
+    event LogConfirmOwnerChange(address oldOwner, address newOwner);
 
     function Owned()
         public
     {
         owner = msg.sender;
+        timeout = 75;
+    }
+
+    function getNewOwnerHash()
+        public
+        view
+        returns (bytes32 _hash)
+    {
+        return newOwnerHash;
     }
 
     //to be used locally only.
-    function hashHelper(address newOwner, uint pin)
+    function pinHasher(address newOwner, uint pin)
         public
         pure 
         returns (bytes32 hash)
     {
         require(newOwner != 0);
-        require(pin > 99999);
         return keccak256(newOwner, pin);
     }
 
@@ -39,17 +52,16 @@ contract Owned {
     {
         return owner;
     }
- 
-    function initializeOwnerChange(address newOwner, bytes32 _hash)
+
+    function initializeOwnerChange(bytes32 _hash)
         public
         onlyOwner
         returns (bool success) 
     {
-        require(newOwner != 0);
+        require(_hash != 0x0);
+        deadline = block.number.add(timeout);
         newOwnerHash = _hash;
-        changeInitialized = true; 
-        LogInitializeOwnerChange(owner, newOwner);
-        // owner = newOwner;
+        LogInitializeOwnerChange(msg.sender, _hash, deadline);
         return true;
     }
 
@@ -58,12 +70,11 @@ contract Owned {
         returns (bool success)
 
     {
-        require(changeInitialized = true);
-        require(newOwnerHash != 0);
+        require(block.number <= deadline);
+        require(newOwnerHash != 0x0);
         require(keccak256(msg.sender, pin) == newOwnerHash);
-        changeInitialized = false;
-        newOwnerHash = bytes32(0);
-        LogConfirmOwnerChange(msg.sender);
+        newOwnerHash = 0x0;
+        LogConfirmOwnerChange(owner, msg.sender);
         owner = msg.sender;
         return true;
     }

@@ -11,7 +11,6 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
 
     let shop;
     const id = 1;
-    const name = "Longsword";
     const price = 1000;
     const addedQuantity = 2;
     const purchasedQuantity = 1;
@@ -21,60 +20,71 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
             .then(_instance => shop = _instance)
     );
 
-    describe("shop owner", () => {
+    describe("owner", () => {
+        let hash;
+        let pin = 623874;
 
         it("should be owned by owner", () => 
             shop.getOwner()
             .then(_owner => _owner.should.be.equal(owner)));
 
-        it("should throw if the wrong address is used to confirm the change of ownership", () => {
-            let pin = 623874;
-            return shop.hashHelper(newOwner, pin)
-                .then(_hash => 
-                    shop.initializeOwnerChange(newOwner, _hash, {from: owner}))
-                .then(() => 
-                    expectedExceptionPromise(() => shop.confirmOwnerChange(pin, {from: Bob, gas: 3000000}), 3000000))
+        describe("initialize change of ownership", () => {
+            
+            beforeEach("get hash from pinHasher", () => {
+                return shop.pinHasher(newOwner, pin)
+                    .then(_hash => hash = _hash)
+            })
+
+            it("should throw if anyone but the owner tries to change the owner", () => {
+                expectedExceptionPromise(() => shop.initializeOwnerChange(hash, {from: Bob, gas: 3000000}), 3000000)
+            })
+
+            it("should allow the owner to change the owner", () => {
+                return shop.initializeOwnerChange(hash, {from: owner})
+                    .then(() => shop.getNewOwnerHash())
+                    .then(_hash => _hash.toString(10).should.be.equal(hash))   
+            })
         })
 
-        it("should throw if the wrong pin is used to confirm the change of ownership", () => {
-            let pin = 623874;
-            let incorrectPin = 123456;
-            return shop.hashHelper(newOwner, pin)
-                .then(_hash => 
-                    shop.initializeOwnerChange(newOwner, _hash, {from: owner}))
-                .then(() => 
-                    expectedExceptionPromise(() => shop.confirmOwnerChange(incorrectPin, {from: newOwner, gas: 3000000}), 3000000))
-        })
+        describe("confirm change of ownership", () => {
 
-        it("should allow the owner to set a new owner", () => {
-            let pin = 623874;
-            return shop.hashHelper(newOwner, pin)
-                .then(_hash => 
-                    shop.initializeOwnerChange(newOwner, _hash, {from: owner}))
-                .then(() => 
-                    shop.confirmOwnerChange(pin, {from: newOwner}))
-            .then(() => shop.getOwner())
-            .then(_owner => _owner.should.be.equal(newOwner))
-        })
+            beforeEach("get hash from pinHasher", () => {
+                return shop.pinHasher(newOwner, pin)
+                    .then(_hash => hash = _hash)
+            })
 
-        it("should let the owner reset the newOwner if no confirmation is received", () => {
-            let pin = 362746;
-            return shop.hashHelper(newOwner, pin)
-                .then(_hash => 
-                    shop.initializeOwnerChange(newOwner, _hash, {from: owner}))
-                .then(() => shop.hashHelper(owner, pin))
-                .then(_hash => 
-                    shop.initializeOwnerChange(owner, _hash, {from: owner}))
-                .then(() => shop.getOwner())
-                .then(_owner => _owner.should.be.equal(owner))
-        })
+            it("should throw if the wrong address is used to confirm the change of ownership", () => shop.initializeOwnerChange(hash, {from: owner})
+                    .then(() => 
+                        expectedExceptionPromise(() => shop.confirmOwnerChange(pin, {from: Bob, gas: 3000000}), 3000000)))
+
+            it("should throw if the wrong pin is used to confirm the change of ownership", () => {
+                let incorrectPin = 123456;
+                return shop.initializeOwnerChange(hash, {from: owner})
+                    .then(() => expectedExceptionPromise(() => shop.confirmOwnerChange(incorrectPin, {from: newOwner, gas: 3000000}), 3000000))
+            })
+
+            it("should allow confirmation of new owner", () => {
+                return shop.initializeOwnerChange(hash, {from: owner})
+                    .then(() => shop.confirmOwnerChange(pin, {from: newOwner}))
+                    .then(() => shop.getOwner())
+                    .then(_owner => _owner.should.be.equal(newOwner))
+            })
+
+            it("should let the owner reset the newOwner if no confirmation is received", () => {
+                return shop.initializeOwnerChange(hash, {from: owner})
+                    .then(() => shop.pinHasher(owner, pin))
+                    .then(_hash => shop.initializeOwnerChange(_hash, {from: owner}))
+                    .then(() => shop.getOwner())
+                    .then(_owner => _owner.should.be.equal(owner))
+            })
+        })  
     })
 
-    describe("addItem()", () => {
+    describe("setItem()", () => {
 
         it("should throw if anyone but the owner tries to add an item to the shop", () => {
             expectedExceptionPromise(
-                () => shop.addItem(id, name, price, addedQuantity, {
+                () => shop.setItem(id, price, addedQuantity, {
                     from: Bob,
                     gas: 3000000}),
                     3000000
@@ -83,19 +93,17 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
 
         it("should allow the owner to add an item to the shop", () => {
             let txObj;
-            let product;
-            return shop.addItem(id, name, price, addedQuantity, {from: owner})
+            let item;
+            return shop.setItem(id, price, addedQuantity, {from: owner})
                 .then(_txObj => txObj = _txObj)
-                .then(() => shop.getItem(id, {from: owner}))
-                .then(_product => {
-                    product = _product;
+                .then(() => shop.getItem(id))
+                .then(_item => {
+                    item = _item;
                     txObj.logs[0].args.id.toString(10).should.be.equal(id.toString(10));
-                    txObj.logs[0].args.name.should.be.equal(name);
                     txObj.logs[0].args.price.toString(10).should.be.equal(price.toString(10));
                     txObj.logs[0].args.quantity.toString(10).should.be.equal(addedQuantity.toString(10));
-                    product[0].should.be.equal(name);
-                    product[1].toString(10).should.be.equal(price.toString(10));
-                    product[2].toString(10).should.be.equal(addedQuantity.toString(10));
+                    item[0].toString(10).should.be.equal(price.toString(10));
+                    item[1].toString(10).should.be.equal(addedQuantity.toString(10));
                 })
         });
 
@@ -107,11 +115,11 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
             let endQuantity;
 
             return shop.getItem(id)
-                .then(_item => startQuantity = _item[2])
-                .then(() => shop.addItem(id, name, price, addedQuantity, {from: owner}))
+                .then(_item => startQuantity = _item[1])
+                .then(() => shop.setItem(id, price, addedQuantity, {from: owner}))
                 .then(() => shop.getItem(id))
                 .then(_item => {
-                    endQuantity = _item[2];
+                    endQuantity = _item[1];
                     endQuantity.should.be.bignumber.equal(startQuantity.add(addedQuantity));
                 })  
         })
@@ -120,7 +128,7 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
 
     describe("buy an item", () => {
 
-        beforeEach("add an item to the shop", () => shop.addItem(id, name, price, addedQuantity, {from: owner}))
+        beforeEach("add an item to the shop", () => shop.setItem(id,  price, addedQuantity, {from: owner}))
 
         it("should allow a customer to buy an item", () => {
         let txObj;
@@ -131,7 +139,6 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
                 txObj = _txObj;
                 txObj.logs[0].event.should.be.equal("LogPurchase");
                 txObj.logs[0].args.id.toString(10).should.be.equal(id.toString(10));
-                txObj.logs[0].args.name.should.be.equal(name);
                 txObj.logs[0].args.price.toString(10).should.be.equal(price.toString(10));
                 txObj.logs[0].args.quantity.toString(10).should.be.equal(purchasedQuantity.toString(10));
             }) 
@@ -140,32 +147,31 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
     it("should correctly update the stock quantity for the item purchased", () => {
         let startQuantity;
         let endQuantity;
-        return shop.addItem(id, name, price, addedQuantity, {from: owner})
-            .then(() => shop.getItem(id))
-            .then(_startQuantity => startQuantity = _startQuantity)
+        return shop.getItem(id)
+            .then(_item => startQuantity = _item[1])
             .then(() => {
                 return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price});
             })
             .then(() => shop.getItem(id))
-            .then(_endQuantity => {
-                endQuantity = _endQuantity;
-                endQuantity[2].toString(10).should.be.equal((startQuantity[2] - purchasedQuantity).toString(10)); 
+            .then(_item => {
+                endQuantity = _item[1];
+                endQuantity.toString(10).should.be.equal((startQuantity.minus(purchasedQuantity)).toString(10)); 
             })
     })
 
-    it("should correctly update the till balance after a purchase", () => {
-        let tillBalanceBefore;
-        let tillBalanceAfter;
-        return shop.addItem(id, name, price, addedQuantity, {from: owner})
-            .then(() => shop.getTill({from: owner}))
+    it("should correctly update the balance after a purchase", () => {
+        let balanceBefore;
+        let balanceAfter;
+        return shop.setItem(id, price, addedQuantity, {from: owner})
+            .then(() => shop.getBalanceOf(owner))
             .then(_balance => {
-                tillBalanceBefore = _balance;
+                balanceBefore = _balance;
                 return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price})
             })
-            .then(() => shop.getTill({from: owner}))
+            .then(() => shop.getBalanceOf(owner))
             .then(_balance => {
-                tillBalanceAfter = _balance;
-                tillBalanceAfter.should.be.bignumber.equal(tillBalanceBefore.add(price * purchasedQuantity));
+                balanceAfter = _balance;
+                balanceAfter.should.be.bignumber.equal(balanceBefore.add(price * purchasedQuantity));
             })
         }) 
 
@@ -179,7 +185,7 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
         it("should throw if a customer attemps to buy more items than the shop has in stock", () => {
             let tooMany = addedQuantity + 1;
             expectedExceptionPromise(() => {
-                return shop.purchaseItem(id, addedQuantity, {
+                return shop.purchaseItem(id, tooMany, {
                     from: Alice,
                     value: tooMany * price
                 });
@@ -189,41 +195,45 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
 
     describe("freezeRay", () => {
 
-        beforeEach("add an item to the shop", () => shop.addItem(id, name, price, addedQuantity, {from: owner}))
+        beforeEach("add an item to the shop", () => shop.setItem(id,  price, addedQuantity, {from: owner}))
 
-        it("should not let anyone but the owner use the freeze() function", () => expectedExceptionPromise(
-                () => shop.freeze(true, {from: Bob})))
+        describe("who?", () => {
 
-        it("should throw if anyone trys to make a purchase while the buyItem() is frozen", () => {
-            shop.freeze(true, {from: owner})
-            .then(txObj => {
-                txObj.logs[0].args.frozen.should.be.equal(true);
-                expectedExceptionPromise(() => {
-                    return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price});
-                })
+            it("should throw if anyone but the owner trys to freeze the shop", () => expectedExceptionPromise(
+                () => shop.freeze(true, {from: Bob, gas: 3000000}), 3000000))
+
+            it("should allow the owner to freeze the shop", () => {
+                return shop.freeze(true, {from: owner})
+                    .then(txObj => txObj.logs[0].args.frozen.should.be.equal(true))
             })
         })
 
-        it("should let the owner un-freeze the buyItem() function", () => {
-            return shop.addItem(id, name, price, addedQuantity, {from: owner})
-            .then(() => shop.freeze(true, {from: owner}))
-            .then(txObj => {
-                txObj.logs[0].args.frozen.should.be.equal(true);
-                expectedExceptionPromise(() => {
-                    return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price})
-                })
+        describe("purchase function", () => {
+            let txObj;   
+    
+            beforeEach("freeze it", () => {
+                return shop.freeze(true, {from: owner})
+                    .then(_txObj => txObj = _txObj);
             })
-            .then(() => shop.freeze(false, {from: owner}))
-            .then(txObj => {
-                txObj.logs[0].args.frozen.should.be.equal(false);
-                return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price});
-            })    
-        })
+
+            it("should throw if anyone trys to make a purchase while the buyItem() is frozen", () => {
+                expectedExceptionPromise(() => shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price, gas: 3000000}), 3000000)
+            })
+
+
+            it("should let the owner un-freeze the buyItem() function", () => {
+                return shop.freeze(false, {from: owner})
+                    .then(txObj => {
+                        txObj.logs[0].args.frozen.should.be.equal(false);
+                        return shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price});
+                    })    
+            })
+        }) 
     })
 
     describe("withdrawFunds", () => {
         
-        beforeEach("add an item to the shop", () => shop.addItem(id, name, price, addedQuantity, {from: owner}))
+        beforeEach("add an item to the shop", () => shop.setItem(id,  price, addedQuantity, {from: owner}))
 
         beforeEach("purchase an item from the shop", () => shop.purchaseItem(id, purchasedQuantity, {from: Alice, value: purchasedQuantity * price}))
 
@@ -234,7 +244,7 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
         })
 
         it("should throw if the owner tries to withdraw more funds than are available in the till", () => {
-        let moreThanAvailableFunds = purchasedQuantity * price + 1;
+            let moreThanAvailableFunds = purchasedQuantity * price + 1;
             expectedExceptionPromise(() => {
                 return shop.withdrawFunds(moreThanAvailableFunds, {from: owner, gas: 3000000}, 3000000);
             })
@@ -249,7 +259,7 @@ contract('Shopfront', ([owner, Alice, Bob, newOwner]) => {
             let tx;
             let endBalance;
             let withdrawalAmount = 500;
-            web3.eth.getBalancePromise(owner)
+            return web3.eth.getBalancePromise(owner)
                 .then(_balance => {
                     startBalance = _balance;
                     return shop.withdrawFunds(withdrawalAmount, {from: owner}) 

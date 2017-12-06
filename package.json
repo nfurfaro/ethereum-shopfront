@@ -55,7 +55,8 @@
     "bluebird": "^3.5.1",
     "dotenv": "^2.0.0",
     "react": "^15.4.2",
-    "react-dom": "^15.4.2"
+    "react-dom": "^15.4.2",
+    "zeppelin-solidity": "^1.4.0"
   },
   "scripts": {
     "start": "node scripts/start.js",
